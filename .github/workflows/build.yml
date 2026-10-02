@@ -24,26 +24,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
-
-      - name: Prepare Gradle Wrapper
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          else
-            echo "gradlew not found in root, generating gradle wrapper..."
-            gradle wrapper
-            chmod +x ./gradlew
-          fi
+        with:
+          gradle-version: '8.5'
 
       - name: Build Extension .cs3 with Gradle
-        run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew make --no-daemon --stacktrace
-          else
-            gradle make --no-daemon --stacktrace
-          fi
+        run: gradle make --no-daemon --stacktrace
 
       - name: Deploy builds to Branch
         uses: JamesIves/github-pages-deploy-action@v4
