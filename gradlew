@@ -1,12 +1,16 @@
 #!/bin/sh
-# Standard Gradle Wrapper Script
-APP_HOME=`cd "`dirname "$0"`" > /dev/null && pwd`
-CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+set -e
 
-if [ ! -f "$CLASSPATH" ]; then
-    if command -v gradle >/dev/null 2>&1; then
-        exec gradle "$@"
-    fi
+DIR="$(cd "$(dirname "$0")" && pwd)"
+JAR="$DIR/gradle/wrapper/gradle-wrapper.jar"
+
+if [ -f "$JAR" ]; then
+    exec java -classpath "$JAR" org.gradle.wrapper.GradleWrapperMain "$@"
 fi
 
-exec java "-Dorg.gradle.appname=gradlew" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+if command -v gradle >/dev/null 2>&1; then
+    exec gradle "$@"
+fi
+
+echo "Error: Neither gradle nor gradle-wrapper.jar was found." >&2
+exit 1
