@@ -1,0 +1,12 @@
+[
+  {
+    "name": "yutt",
+    "pluginClassName": "com.yutt.YuttPlugin",
+    "description": "Kho phim YUTT - VKontakte & OK.ru Full HD 1080p",
+    "version": 1,
+    "author": "yutt",
+    "tvTypes": ["TvSeries", "Movie", "AsianDrama"],
+    "iconUrl": "https://www.yuthanhthien.top/favicon.ico",
+    "url": "https://raw.githubusercontent.com/trannie91/YUTT/builds/Yutt.cs3"
+  }
+]
