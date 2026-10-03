@@ -12,6 +12,8 @@ class VkExtractor : ExtractorApi() {
     override var mainUrl = "https://vk.com"
     override val requiresReferer = false
 
+    private val ESCAPED_SLASH = "\" + "/"
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
@@ -32,11 +34,11 @@ class VkExtractor : ExtractorApi() {
                 ?: Regex("""hlss*=s*([^s&"']+)""").find(response)
 
             if (hlsMatch != null) {
-                val hlsUrl = hlsMatch.groupValues[1].replace("\/", "/")
+                val hlsUrl = hlsMatch.groupValues[1].replace(ESCAPED_SLASH, "/")
                 callback(
                     ExtractorLink(
                         source = name,
-                        name = "$name - 1080p FHD HLS Adaptive",
+                        name = "VKontakte - 1080p FHD HLS Adaptive",
                         url = hlsUrl,
                         referer = "https://vk.com/",
                         quality = Qualities.P1080.value,
@@ -50,11 +52,11 @@ class VkExtractor : ExtractorApi() {
                 ?: Regex("""url1080s*=s*([^s&"']+)""").find(response)
 
             if (mp4_1080 != null) {
-                val mp4Url = mp4_1080.groupValues[1].replace("\/", "/")
+                val mp4Url = mp4_1080.groupValues[1].replace(ESCAPED_SLASH, "/")
                 callback(
                     ExtractorLink(
                         source = name,
-                        name = "$name - 1080p Full HD Direct",
+                        name = "VKontakte - 1080p Full HD Direct",
                         url = mp4Url,
                         referer = "https://vk.com/",
                         quality = Qualities.P1080.value,
@@ -65,11 +67,11 @@ class VkExtractor : ExtractorApi() {
                 val mp4_720 = Regex(""""url720"s*:s*"([^"]+)"""").find(response)
                     ?: Regex("""url720s*=s*([^s&"']+)""").find(response)
                 if (mp4_720 != null) {
-                    val mp4Url = mp4_720.groupValues[1].replace("\/", "/")
+                    val mp4Url = mp4_720.groupValues[1].replace(ESCAPED_SLASH, "/")
                     callback(
                         ExtractorLink(
                             source = name,
-                            name = "$name - 720p HD Direct",
+                            name = "VKontakte - 720p HD Direct",
                             url = mp4Url,
                             referer = "https://vk.com/",
                             quality = Qualities.P720.value,
