@@ -34,6 +34,10 @@ class YuttProvider : MainAPI() {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     private val mapper = jacksonObjectMapper()
 
+    // Khóa trường JSON của Blogger
+    private val JSON_T_KEY = "$" + "t"
+    private val JSON_THUMBNAIL_KEY = "media$" + "thumbnail"
+
     data class YtServer(
         val name: String? = null,
         val type: String? = null,
@@ -99,7 +103,8 @@ class YuttProvider : MainAPI() {
         val feedUrl = if (request.data.isEmpty()) {
             "$mainUrl/feeds/posts/default?alt=json&start-index=$startIndex&max-results=20"
         } else {
-            "$mainUrl/feeds/posts/default/-/${URLEncoder.encode(request.data, "UTF-8")}?alt=json&start-index=$startIndex&max-results=20"
+            val encTag = URLEncoder.encode(request.data, "UTF-8")
+            "$mainUrl/feeds/posts/default/-/$encTag?alt=json&start-index=$startIndex&max-results=20"
         }
 
         val jsonStr = app.get(
@@ -116,7 +121,7 @@ class YuttProvider : MainAPI() {
             val entries = root.get("feed")?.get("entry")
             if (entries != null && entries.isArray) {
                 for (entry in entries) {
-                    val title = entry.get("title")?.get("$t")?.asText()?.trim() ?: continue
+                    val title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: continue
                     val links = entry.get("link")
                     var postUrl = ""
                     if (links != null && links.isArray) {
@@ -129,10 +134,10 @@ class YuttProvider : MainAPI() {
                     }
                     if (postUrl.isEmpty()) continue
 
-                    val htmlContent = entry.get("content")?.get("$t")?.asText() ?: ""
+                    val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
                     val ytData = decodeBase64Payload(htmlContent)
 
-                    val thumbnail = entry.get("media$thumbnail")?.get("url")?.asText()
+                    val thumbnail = entry.get(JSON_THUMBNAIL_KEY)?.get("url")?.asText()
                         ?.replace("/s72-c/", "/s600/")
                     val poster = ytData?.image ?: thumbnail ?: ""
 
@@ -183,7 +188,7 @@ class YuttProvider : MainAPI() {
             val entries = root.get("feed")?.get("entry")
             if (entries != null && entries.isArray) {
                 for (entry in entries) {
-                    val title = entry.get("title")?.get("$t")?.asText()?.trim() ?: continue
+                    val title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: continue
                     val links = entry.get("link")
                     var postUrl = ""
                     if (links != null && links.isArray) {
@@ -196,10 +201,10 @@ class YuttProvider : MainAPI() {
                     }
                     if (postUrl.isEmpty()) continue
 
-                    val htmlContent = entry.get("content")?.get("$t")?.asText() ?: ""
+                    val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
                     val ytData = decodeBase64Payload(htmlContent)
 
-                    val thumbnail = entry.get("media$thumbnail")?.get("url")?.asText()
+                    val thumbnail = entry.get(JSON_THUMBNAIL_KEY)?.get("url")?.asText()
                         ?.replace("/s72-c/", "/s600/")
                     val poster = ytData?.image ?: thumbnail ?: ""
 
@@ -245,7 +250,7 @@ class YuttProvider : MainAPI() {
                     servers.forEachIndexed { partIdx, server ->
                         val link = server.link?.trim() ?: ""
                         if (link.isNotEmpty()) {
-                            val partName = server.name ?: "P${partIdx + 1}"
+                            val partName = server.name ?: ("P" + (partIdx + 1))
                             episodes.add(
                                 newEpisode(link) {
                                     this.name = "$epTitle ($partName)"
@@ -272,10 +277,11 @@ class YuttProvider : MainAPI() {
             iframes.forEachIndexed { idx, iframe ->
                 val src = iframe.attr("src").trim()
                 if (src.isNotEmpty()) {
+                    val epNumber = idx + 1
                     episodes.add(
                         newEpisode(src) {
-                            this.name = "Tập ${idx + 1}"
-                            this.episode = idx + 1
+                            this.name = "Tập " + epNumber
+                            this.episode = epNumber
                         }
                     )
                 }
@@ -310,9 +316,9 @@ class YuttProvider : MainAPI() {
                 val id = url.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
                 url = "https://ok.ru/videoembed/$id"
             } else if (url.contains("captionfy.com/video/youtube/")) {
-                val match = Regex("""captionfy\.com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
+                val match = Regex("""captionfy.com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
                 if (match != null) {
-                    url = "https://www.youtube.com/watch?v=${match.groupValues[1]}"
+                    url = "https://www.youtube.com/watch?v=" + match.groupValues[1]
                 }
             }
 
