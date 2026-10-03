@@ -3,7 +3,7 @@ package com.yutt
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 
@@ -28,33 +28,55 @@ class VkExtractor : ExtractorApi() {
             ).text
 
             // 1. Luồng HLS Multi-Quality Adaptive FHD 1080p
-            val hlsMatch = Regex(""""hls"\s*:\s*"([^"]+)"""").find(response)
+            val hlsMatch = Regex(""""hls"s*:s*"([^"]+)"""").find(response)
+                ?: Regex("""hlss*=s*([^s&"']+)""").find(response)
+
             if (hlsMatch != null) {
+                val hlsUrl = hlsMatch.groupValues[1].replace("\/", "/")
                 callback(
                     ExtractorLink(
                         source = name,
                         name = "$name - 1080p FHD HLS Adaptive",
-                        url = hlsMatch.groupValues[1].replace("\\/", "/"),
+                        url = hlsUrl,
                         referer = "https://vk.com/",
                         quality = Qualities.P1080.value,
-                        type = INFER_TYPE
+                        type = ExtractorLinkType.M3U8
                     )
                 )
             }
 
             // 2. Lọc DUY NHẤT MP4 1080p Full HD (Loại bỏ toàn bộ 720p, 480p, 360p, 240p)
-            val mp4_1080 = Regex(""""url1080"\s*:\s*"([^"]+)"""").find(response)
+            val mp4_1080 = Regex(""""url1080"s*:s*"([^"]+)"""").find(response)
+                ?: Regex("""url1080s*=s*([^s&"']+)""").find(response)
+
             if (mp4_1080 != null) {
+                val mp4Url = mp4_1080.groupValues[1].replace("\/", "/")
                 callback(
                     ExtractorLink(
                         source = name,
                         name = "$name - 1080p Full HD Direct",
-                        url = mp4_1080.groupValues[1].replace("\\/", "/"),
+                        url = mp4Url,
                         referer = "https://vk.com/",
                         quality = Qualities.P1080.value,
-                        type = INFER_TYPE
+                        type = ExtractorLinkType.VIDEO
                     )
                 )
+            } else if (hlsMatch == null) {
+                val mp4_720 = Regex(""""url720"s*:s*"([^"]+)"""").find(response)
+                    ?: Regex("""url720s*=s*([^s&"']+)""").find(response)
+                if (mp4_720 != null) {
+                    val mp4Url = mp4_720.groupValues[1].replace("\/", "/")
+                    callback(
+                        ExtractorLink(
+                            source = name,
+                            name = "$name - 720p HD Direct",
+                            url = mp4Url,
+                            referer = "https://vk.com/",
+                            quality = Qualities.P720.value,
+                            type = ExtractorLinkType.VIDEO
+                        )
+                    )
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
