@@ -1,6 +1,6 @@
 {
   "name": "yutt",
-  "description": "Kho phim YUTT - VKontakte & OK.ru Full HD 1080p",
+  "description": "Kho phim Đam Mỹ Yu Thánh Thiện (yuthanhthien.top) - VKontakte & OK.ru Full HD 1080p",
   "manifestVersion": 1,
   "pluginLists": [
     "https://raw.githubusercontent.com/trannie91/YUTT/builds/plugins.json"

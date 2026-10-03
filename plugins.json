@@ -1,12 +1,18 @@
 [
   {
     "name": "yutt",
+    "internalName": "Yutt",
     "pluginClassName": "com.yutt.YuttPlugin",
-    "description": "Kho phim YUTT - VKontakte & OK.ru Full HD 1080p",
+    "description": "Kho phim Đam Mỹ Yu Thánh Thiện (yuthanhthien.top) - VKontakte & OK.ru Full HD 1080p",
     "version": 1,
-    "author": "yutt",
+    "apiVersion": 1,
+    "status": 3,
+    "authors": ["yutt"],
     "tvTypes": ["TvSeries", "Movie", "AsianDrama"],
     "iconUrl": "https://www.yuthanhthien.top/favicon.ico",
-    "url": "https://raw.githubusercontent.com/trannie91/YUTT/builds/Yutt.cs3"
+    "repositoryUrl": "https://github.com/trannie91/YUTT",
+    "url": "https://raw.githubusercontent.com/trannie91/YUTT/builds/Yutt.cs3",
+    "fileHash": "sha256-8b8c1f5f1bf0021e2a0844187c884785c388f40950f95216120279c5a03a3988",
+    "fileSize": 24668
   }
 ]
