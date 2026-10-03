@@ -12,7 +12,7 @@ class VkExtractor : ExtractorApi() {
     override var mainUrl = "https://vk.com"
     override val requiresReferer = false
 
-    private val ESCAPED_SLASH = "\" + "/"
+    private val ESCAPED_SLASH = charArrayOf(92.toChar(), 47.toChar()).concatToString()
 
     override suspend fun getUrl(
         url: String,
@@ -30,8 +30,7 @@ class VkExtractor : ExtractorApi() {
             ).text
 
             // 1. Luồng HLS Multi-Quality Adaptive FHD 1080p
-            val hlsMatch = Regex(""""hls"s*:s*"([^"]+)"""").find(response)
-                ?: Regex("""hlss*=s*([^s&"']+)""").find(response)
+            val hlsMatch = Regex("""["']?hls["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
 
             if (hlsMatch != null) {
                 val hlsUrl = hlsMatch.groupValues[1].replace(ESCAPED_SLASH, "/")
@@ -48,8 +47,7 @@ class VkExtractor : ExtractorApi() {
             }
 
             // 2. Lọc DUY NHẤT MP4 1080p Full HD (Loại bỏ toàn bộ 720p, 480p, 360p, 240p)
-            val mp4_1080 = Regex(""""url1080"s*:s*"([^"]+)"""").find(response)
-                ?: Regex("""url1080s*=s*([^s&"']+)""").find(response)
+            val mp4_1080 = Regex("""["']?url1080["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
 
             if (mp4_1080 != null) {
                 val mp4Url = mp4_1080.groupValues[1].replace(ESCAPED_SLASH, "/")
@@ -64,8 +62,7 @@ class VkExtractor : ExtractorApi() {
                     )
                 )
             } else if (hlsMatch == null) {
-                val mp4_720 = Regex(""""url720"s*:s*"([^"]+)"""").find(response)
-                    ?: Regex("""url720s*=s*([^s&"']+)""").find(response)
+                val mp4_720 = Regex("""["']?url720["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
                 if (mp4_720 != null) {
                     val mp4Url = mp4_720.groupValues[1].replace(ESCAPED_SLASH, "/")
                     callback(
