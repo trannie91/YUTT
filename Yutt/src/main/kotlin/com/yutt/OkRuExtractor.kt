@@ -13,6 +13,8 @@ class OkRuExtractor : ExtractorApi() {
     override var mainUrl = "https://ok.ru"
     override val requiresReferer = false
 
+    private val DOUBLE_QUOTE = 34.toChar().toString()
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
@@ -23,10 +25,10 @@ class OkRuExtractor : ExtractorApi() {
             var targetUrl = url.trim()
             if (targetUrl.contains("workers.dev/videoembed/")) {
                 val id = targetUrl.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
-                targetUrl = "https://ok.ru/videoembed/$id"
+                targetUrl = "https://ok.ru/videoembed/" + id
             } else if (!targetUrl.contains("/videoembed/") && targetUrl.contains("/video/")) {
                 val id = targetUrl.substringAfter("/video/").substringBefore("?").substringBefore("#")
-                targetUrl = "https://ok.ru/videoembed/$id"
+                targetUrl = "https://ok.ru/videoembed/" + id
             }
 
             val doc = app.get(
@@ -38,7 +40,7 @@ class OkRuExtractor : ExtractorApi() {
             ).document
 
             val dataOptions = doc.selectFirst("div[data-options]")?.attr("data-options") ?: return
-            val decoded = dataOptions.replace("&quot;", """).replace("&amp;", "&")
+            val decoded = dataOptions.replace("&quot;", DOUBLE_QUOTE).replace("&amp;", "&")
 
             val mapper = jacksonObjectMapper()
             val root = mapper.readTree(decoded)
@@ -50,13 +52,13 @@ class OkRuExtractor : ExtractorApi() {
                 metadataNode
             }
 
-            // 1. Luồng HLS Adaptive Master Playlist chất lượng cao nhất 1080p FHD
+            // 1. Luồng HLS Adaptive Master Playlist 1080p FHD
             val hlsUrl = metaJson.get("hlsManifestUrl")?.asText()
             if (!hlsUrl.isNullOrEmpty()) {
                 callback(
                     ExtractorLink(
                         source = name,
-                        name = "$name - 1080p FHD HLS Adaptive",
+                        name = "OK.ru - 1080p FHD HLS Adaptive",
                         url = hlsUrl,
                         referer = "https://ok.ru/",
                         quality = Qualities.P1080.value,
@@ -80,7 +82,7 @@ class OkRuExtractor : ExtractorApi() {
                     callback(
                         ExtractorLink(
                             source = name,
-                            name = "$name - 1080p Full HD Direct",
+                            name = "OK.ru - 1080p Full HD Direct",
                             url = fhd1080.second,
                             referer = "https://ok.ru/",
                             quality = Qualities.P1080.value,
@@ -94,7 +96,7 @@ class OkRuExtractor : ExtractorApi() {
                         callback(
                             ExtractorLink(
                                 source = name,
-                                name = "$name - " + qualityLabel + " Direct",
+                                name = "OK.ru - " + qualityLabel + " Direct",
                                 url = highestFallback.second,
                                 referer = "https://ok.ru/",
                                 quality = Qualities.P720.value,
