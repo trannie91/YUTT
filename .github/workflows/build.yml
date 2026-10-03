@@ -59,7 +59,7 @@ jobs:
               "name": "yutt",
               "internalName": "${INTERNAL_NAME}",
               "pluginClassName": "com.yutt.YuttPlugin",
-              "description": "Kho phim Đam Mỹ Yu Thánh Thiện (yuthanhthien.top) - VKontakte & OK.ru Full HD 1080p",
+              "description": "Kho phim YUTT - VKontakte & OK.ru Full HD 1080p",
               "version": 1,
               "apiVersion": 1,
               "status": 3,
@@ -80,7 +80,7 @@ jobs:
             cat << EOF > build/repo.json
           {
             "name": "yutt",
-            "description": "Kho phim Đam Mỹ Yu Thánh Thiện (yuthanhthien.top) - VKontakte & OK.ru Full HD 1080p",
+            "description": "Kho phim YUTT - VKontakte & OK.ru Full HD 1080p",
             "manifestVersion": 1,
             "pluginLists": [
               "https://raw.githubusercontent.com/${{ github.repository }}/builds/plugins.json"
