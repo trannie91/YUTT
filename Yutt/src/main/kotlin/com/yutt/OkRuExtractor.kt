@@ -3,7 +3,7 @@ package com.yutt
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -23,6 +23,9 @@ class OkRuExtractor : ExtractorApi() {
             var targetUrl = url.trim()
             if (targetUrl.contains("workers.dev/videoembed/")) {
                 val id = targetUrl.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
+                targetUrl = "https://ok.ru/videoembed/$id"
+            } else if (!targetUrl.contains("/videoembed/") && targetUrl.contains("/video/")) {
+                val id = targetUrl.substringAfter("/video/").substringBefore("?").substringBefore("#")
                 targetUrl = "https://ok.ru/videoembed/$id"
             }
 
@@ -47,7 +50,7 @@ class OkRuExtractor : ExtractorApi() {
                 metadataNode
             }
 
-            // 1. Luồng HLS Adaptive Master Playlist 1080p
+            // 1. Luồng HLS Adaptive Master Playlist chất lượng cao nhất 1080p FHD
             val hlsUrl = metaJson.get("hlsManifestUrl")?.asText()
             if (!hlsUrl.isNullOrEmpty()) {
                 callback(
@@ -57,7 +60,7 @@ class OkRuExtractor : ExtractorApi() {
                         url = hlsUrl,
                         referer = "https://ok.ru/",
                         quality = Qualities.P1080.value,
-                        type = INFER_TYPE
+                        type = ExtractorLinkType.M3U8
                     )
                 )
             }
@@ -81,9 +84,24 @@ class OkRuExtractor : ExtractorApi() {
                             url = fhd1080.second,
                             referer = "https://ok.ru/",
                             quality = Qualities.P1080.value,
-                            type = INFER_TYPE
+                            type = ExtractorLinkType.VIDEO
                         )
                     )
+                } else if (hlsUrl.isNullOrEmpty()) {
+                    val highestFallback = videoList.firstOrNull { it.first == "hd" || it.first == "720" } ?: videoList.lastOrNull()
+                    if (highestFallback != null) {
+                        val qualityLabel = highestFallback.first.uppercase()
+                        callback(
+                            ExtractorLink(
+                                source = name,
+                                name = "$name - " + qualityLabel + " Direct",
+                                url = highestFallback.second,
+                                referer = "https://ok.ru/",
+                                quality = Qualities.P720.value,
+                                type = ExtractorLinkType.VIDEO
+                            )
+                        )
+                    }
                 }
             }
         } catch (e: Exception) {
