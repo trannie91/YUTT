@@ -33,35 +33,54 @@ jobs:
         run: |
           gradle make --no-daemon --stacktrace || gradle build --no-daemon --stacktrace
 
-      - name: Prepare Artifacts for Deploy
+      - name: Prepare Artifacts and Generate Metadata
         run: |
           mkdir -p build
           find . -name "*.cs3" -exec cp -fv {} build/ \; || true
           find . -maxdepth 3 -name "plugins.json" -exec cp -fv {} build/ \; || true
           find . -maxdepth 3 -name "updater.json" -exec cp -fv {} build/ \; || true
 
-          if [ ! -f "build/plugins.json" ]; then
-            cat << 'EOF' > build/plugins.json
+          # Find the built .cs3 file to calculate real sha256 and size
+          CS3_FILE=$(find build -name "*.cs3" | head -n 1)
+          if [ -n "$CS3_FILE" ] && [ -f "$CS3_FILE" ]; then
+            FILE_SIZE=$(wc -c < "$CS3_FILE" | tr -d ' ')
+            SHA256_HEX=$(sha256sum "$CS3_FILE" | awk '{print $1}')
+            FILE_HASH="sha256-${SHA256_HEX}"
+            FILENAME=$(basename "$CS3_FILE")
+            INTERNAL_NAME="${FILENAME%.cs3}"
+
+            echo "Found CS3: $FILENAME ($FILE_SIZE bytes, Hash: $FILE_HASH)"
+
+            # If plugins.json does not exist or lacks fileHash, write full schema
+            if [ ! -f "build/plugins.json" ] || ! grep -q "fileHash" "build/plugins.json"; then
+              cat << EOF > build/plugins.json
           [
             {
               "name": "yutt",
+              "internalName": "${INTERNAL_NAME}",
               "pluginClassName": "com.yutt.YuttPlugin",
-              "description": "Kho phim YUTT - VKontakte & OK.ru Full HD 1080p",
+              "description": "Kho phim Đam Mỹ Yu Thánh Thiện (yuthanhthien.top) - VKontakte & OK.ru Full HD 1080p",
               "version": 1,
-              "author": "yutt",
+              "apiVersion": 1,
+              "status": 3,
+              "authors": ["yutt"],
               "tvTypes": ["TvSeries", "Movie", "AsianDrama"],
               "iconUrl": "https://www.yuthanhthien.top/favicon.ico",
-              "url": "https://raw.githubusercontent.com/${{ github.repository }}/builds/Yutt.cs3"
+              "repositoryUrl": "https://github.com/${{ github.repository }}",
+              "url": "https://raw.githubusercontent.com/${{ github.repository }}/builds/${FILENAME}",
+              "fileHash": "${FILE_HASH}",
+              "fileSize": ${FILE_SIZE}
             }
           ]
           EOF
+            fi
           fi
 
           if [ ! -f "build/repo.json" ]; then
-            cat << 'EOF' > build/repo.json
+            cat << EOF > build/repo.json
           {
             "name": "yutt",
-            "description": "Kho phim YUTT - VKontakte & OK.ru Full HD 1080p",
+            "description": "Kho phim Đam Mỹ Yu Thánh Thiện (yuthanhthien.top) - VKontakte & OK.ru Full HD 1080p",
             "manifestVersion": 1,
             "pluginLists": [
               "https://raw.githubusercontent.com/${{ github.repository }}/builds/plugins.json"
@@ -72,6 +91,8 @@ jobs:
 
           echo "Deployment folder contents:"
           ls -la build/
+          echo "Generated plugins.json:"
+          cat build/plugins.json || true
 
       - name: Deploy builds to Branch
         uses: JamesIves/github-pages-deploy-action@v4
