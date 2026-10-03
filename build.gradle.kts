@@ -49,10 +49,10 @@ subprojects {
             targetCompatibility = JavaVersion.VERSION_1_8
         }
 
-        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-            kotlinOptions {
-                jvmTarget = "1.8"
-                freeCompilerArgs = freeCompilerArgs + listOf(
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+                freeCompilerArgs.addAll(
                     "-opt-in=kotlin.RequiresOptIn",
                     "-Xskip-metadata-version-check"
                 )
