@@ -101,10 +101,10 @@ class YuttProvider : MainAPI() {
     ): HomePageResponse {
         val startIndex = (page - 1) * 20 + 1
         val feedUrl = if (request.data.isEmpty()) {
-            "$mainUrl/feeds/posts/default?alt=json&start-index=$startIndex&max-results=20"
+            "$mainUrl/feeds/posts/default?alt=json&start-index=" + startIndex + "&max-results=20"
         } else {
             val encTag = URLEncoder.encode(request.data, "UTF-8")
-            "$mainUrl/feeds/posts/default/-/$encTag?alt=json&start-index=$startIndex&max-results=20"
+            "$mainUrl/feeds/posts/default/-/" + encTag + "?alt=json&start-index=" + startIndex + "&max-results=20"
         }
 
         val jsonStr = app.get(
@@ -172,7 +172,7 @@ class YuttProvider : MainAPI() {
         if (query.trim().isEmpty()) return emptyList()
 
         val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-        val searchUrl = "$mainUrl/feeds/posts/default?q=$encodedQuery&alt=json&max-results=30"
+        val searchUrl = "$mainUrl/feeds/posts/default?q=" + encodedQuery + "&alt=json&max-results=30"
 
         val jsonStr = app.get(
             searchUrl,
@@ -238,7 +238,7 @@ class YuttProvider : MainAPI() {
         if (ytData?.episodes != null && ytData.episodes.isNotEmpty()) {
             ytData.episodes.forEachIndexed { epIndex, ep ->
                 val epNum = epIndex + 1
-                val epTitle = ep.name?.ifEmpty { "Tập $epNum" } ?: "Tập $epNum"
+                val epTitle = ep.name?.ifEmpty { "Tập " + epNum } ?: ("Tập " + epNum)
                 val servers = ep.servers ?: emptyList()
 
                 val isMultiPart = servers.any { s ->
@@ -253,7 +253,7 @@ class YuttProvider : MainAPI() {
                             val partName = server.name ?: ("P" + (partIdx + 1))
                             episodes.add(
                                 newEpisode(link) {
-                                    this.name = "$epTitle ($partName)"
+                                    this.name = epTitle + " (" + partName + ")"
                                     this.episode = epNum
                                 }
                             )
@@ -314,9 +314,9 @@ class YuttProvider : MainAPI() {
 
             if (url.contains("workers.dev/videoembed/")) {
                 val id = url.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
-                url = "https://ok.ru/videoembed/$id"
-            } else if (url.contains("captionfy.com/video/youtube/")) {
-                val match = Regex("""captionfy.com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
+                url = "https://ok.ru/videoembed/" + id
+            } else if (url.contains("captionfy[.]com/video/youtube/") || url.contains("captionfy.com/video/youtube/")) {
+                val match = Regex("""captionfy[.]com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
                 if (match != null) {
                     url = "https://www.youtube.com/watch?v=" + match.groupValues[1]
                 }
