@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.util.Base64
@@ -19,6 +20,10 @@ class YuttProvider : MainAPI() {
         TvType.Movie,
         TvType.AsianDrama
     )
+
+    // Blog ID chính thức trên Google Blogger để kết nối trực tiếp không bao giờ bị chặn hay Connection Reset
+    private val BLOG_ID = "6970200487036183744"
+    private val bloggerApiBase = "https://www.blogger.com/feeds/$BLOG_ID/posts/default"
 
     override val mainPage = mainPageOf(
         "" to "Yu Thánh Thiện - Mới Cập Nhật",
@@ -75,24 +80,51 @@ class YuttProvider : MainAPI() {
         }
     }
 
-    private fun extractPoster(element: Element): String {
-        val img = element.selectFirst("img")
-        var poster = ""
-        if (img != null) {
-            val candidates = listOf(
-                img.attr("src"),
-                img.attr("data-src"),
-                img.attr("data-original")
-            )
-            for (cand in candidates) {
-                val trimmed = cand.trim()
-                if (trimmed.isNotEmpty() && !trimmed.startsWith("data:image")) {
-                    poster = trimmed
-                    break
+    private fun extractPosterFromHtml(html: String): String {
+        return try {
+            val doc = Jsoup.parse(html)
+            val img = doc.selectFirst("img")
+            var poster = ""
+            if (img != null) {
+                val candidates = listOf(
+                    img.attr("src"),
+                    img.attr("data-src"),
+                    img.attr("data-original")
+                )
+                for (cand in candidates) {
+                    val trimmed = cand.trim()
+                    if (trimmed.isNotEmpty() && !trimmed.startsWith("data:image")) {
+                        poster = trimmed
+                        break
+                    }
                 }
             }
+            fixUrl(poster)
+        } catch (e: Exception) {
+            ""
         }
-        return fixUrl(poster)
+    }
+
+    private suspend fun fetchBloggerFeed(endpointUrl: String): String {
+        return try {
+            app.get(
+                endpointUrl,
+                headers = mapOf(
+                    "User-Agent" to userAgent,
+                    "Accept" to "application/json"
+                )
+            ).text
+        } catch (e: Exception) {
+            // Nếu có sự cố, thử fallback sang domain yuthanhthien.top
+            val fallbackUrl = endpointUrl.replace("https://www.blogger.com/feeds/$BLOG_ID/posts/default", "$mainUrl/feeds/posts/default")
+            app.get(
+                fallbackUrl,
+                headers = mapOf(
+                    "User-Agent" to userAgent,
+                    "Referer" to "$mainUrl/"
+                )
+            ).text
+        }
     }
 
     override suspend fun getMainPage(
@@ -101,48 +133,51 @@ class YuttProvider : MainAPI() {
     ): HomePageResponse {
         val startIndex = (page - 1) * 20 + 1
         val feedUrl = if (request.data.isEmpty()) {
-            "$mainUrl/feeds/posts/default?alt=json&start-index=" + startIndex + "&max-results=20"
+            "$bloggerApiBase?alt=json&start-index=$startIndex&max-results=20"
         } else {
             val encTag = URLEncoder.encode(request.data, "UTF-8")
-            "$mainUrl/feeds/posts/default/-/" + encTag + "?alt=json&start-index=" + startIndex + "&max-results=20"
+            "$bloggerApiBase/-/$encTag?alt=json&start-index=$startIndex&max-results=20"
         }
 
-        val jsonStr = app.get(
-            feedUrl,
-            headers = mapOf(
-                "User-Agent" to userAgent,
-                "Referer" to "$mainUrl/"
-            )
-        ).text
-
+        val jsonStr = fetchBloggerFeed(feedUrl)
         val searchList = mutableListOf<SearchResponse>()
+
         try {
             val root = mapper.readTree(jsonStr)
             val entries = root.get("feed")?.get("entry")
             if (entries != null && entries.isArray) {
                 for (entry in entries) {
                     val title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: continue
-                    val links = entry.get("link")
-                    var postUrl = ""
-                    if (links != null && links.isArray) {
-                        for (l in links) {
-                            if (l.get("rel")?.asText() == "alternate") {
-                                postUrl = l.get("href")?.asText() ?: ""
-                                break
+                    val rawId = entry.get("id")?.get(JSON_T_KEY)?.asText() ?: ""
+                    val postId = if (rawId.contains("post-")) rawId.substringAfter("post-") else ""
+
+                    val postApiUrl = if (postId.isNotEmpty()) {
+                        "$bloggerApiBase/$postId?alt=json"
+                    } else {
+                        var altLink = ""
+                        val links = entry.get("link")
+                        if (links != null && links.isArray) {
+                            for (l in links) {
+                                if (l.get("rel")?.asText() == "alternate") {
+                                    altLink = l.get("href")?.asText() ?: ""
+                                    break
+                                }
                             }
                         }
+                        altLink
                     }
-                    if (postUrl.isEmpty()) continue
+
+                    if (postApiUrl.isEmpty()) continue
 
                     val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
                     val ytData = decodeBase64Payload(htmlContent)
 
                     val thumbnail = entry.get(JSON_THUMBNAIL_KEY)?.get("url")?.asText()
                         ?.replace("/s72-c/", "/s600/")
-                    val poster = ytData?.image ?: thumbnail ?: ""
+                    val poster = ytData?.image ?: thumbnail ?: extractPosterFromHtml(htmlContent)
 
                     searchList.add(
-                        newTvSeriesSearchResponse(title, postUrl, TvType.AsianDrama) {
+                        newTvSeriesSearchResponse(title, postApiUrl, TvType.AsianDrama) {
                             this.posterUrl = poster
                         }
                     )
@@ -172,44 +207,47 @@ class YuttProvider : MainAPI() {
         if (query.trim().isEmpty()) return emptyList()
 
         val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-        val searchUrl = "$mainUrl/feeds/posts/default?q=" + encodedQuery + "&alt=json&max-results=30"
+        val searchUrl = "$bloggerApiBase?q=$encodedQuery&alt=json&max-results=30"
 
-        val jsonStr = app.get(
-            searchUrl,
-            headers = mapOf(
-                "User-Agent" to userAgent,
-                "Referer" to "$mainUrl/"
-            )
-        ).text
-
+        val jsonStr = fetchBloggerFeed(searchUrl)
         val results = mutableListOf<SearchResponse>()
+
         try {
             val root = mapper.readTree(jsonStr)
             val entries = root.get("feed")?.get("entry")
             if (entries != null && entries.isArray) {
                 for (entry in entries) {
                     val title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: continue
-                    val links = entry.get("link")
-                    var postUrl = ""
-                    if (links != null && links.isArray) {
-                        for (l in links) {
-                            if (l.get("rel")?.asText() == "alternate") {
-                                postUrl = l.get("href")?.asText() ?: ""
-                                break
+                    val rawId = entry.get("id")?.get(JSON_T_KEY)?.asText() ?: ""
+                    val postId = if (rawId.contains("post-")) rawId.substringAfter("post-") else ""
+
+                    val postApiUrl = if (postId.isNotEmpty()) {
+                        "$bloggerApiBase/$postId?alt=json"
+                    } else {
+                        var altLink = ""
+                        val links = entry.get("link")
+                        if (links != null && links.isArray) {
+                            for (l in links) {
+                                if (l.get("rel")?.asText() == "alternate") {
+                                    altLink = l.get("href")?.asText() ?: ""
+                                    break
+                                }
                             }
                         }
+                        altLink
                     }
-                    if (postUrl.isEmpty()) continue
+
+                    if (postApiUrl.isEmpty()) continue
 
                     val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
                     val ytData = decodeBase64Payload(htmlContent)
 
                     val thumbnail = entry.get(JSON_THUMBNAIL_KEY)?.get("url")?.asText()
                         ?.replace("/s72-c/", "/s600/")
-                    val poster = ytData?.image ?: thumbnail ?: ""
+                    val poster = ytData?.image ?: thumbnail ?: extractPosterFromHtml(htmlContent)
 
                     results.add(
-                        newTvSeriesSearchResponse(title, postUrl, TvType.AsianDrama) {
+                        newTvSeriesSearchResponse(title, postApiUrl, TvType.AsianDrama) {
                             this.posterUrl = poster
                         }
                     )
@@ -223,22 +261,47 @@ class YuttProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val doc = app.get(url, headers = mapOf("User-Agent" to userAgent)).document
-        val html = doc.html()
+        var title = "Phim BL"
+        var htmlContent = ""
+        var poster = ""
+        var originalUrl = url
 
-        val rawTitle = doc.selectFirst("h1.post-title, h1, title")?.text()?.trim() ?: "Phim BL"
-        val title = rawTitle.substringBefore(" - Yu Thánh Thiện").substringBefore(" - Yu Gềi").trim()
+        if (url.contains("blogger.com/feeds/") || url.endsWith("?alt=json")) {
+            val jsonStr = app.get(url, headers = mapOf("User-Agent" to userAgent)).text
+            val root = mapper.readTree(jsonStr)
+            val entry = if (root.has("entry")) root.get("entry") else root
 
-        val ytData = decodeBase64Payload(html)
-        val poster = ytData?.image ?: extractPoster(doc.selectFirst("article, .post, .entry-content") ?: doc)
-        val plot = ytData?.note?.ifEmpty { null } ?: doc.selectFirst(".entry-content p")?.text()?.trim() ?: title
+            title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: "Phim BL"
+            htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
+
+            val links = entry.get("link")
+            if (links != null && links.isArray) {
+                for (l in links) {
+                    if (l.get("rel")?.asText() == "alternate") {
+                        originalUrl = l.get("href")?.asText() ?: url
+                        break
+                    }
+                }
+            }
+        } else {
+            val doc = app.get(url, headers = mapOf("User-Agent" to userAgent)).document
+            val rawTitle = doc.selectFirst("h1.post-title, h1, title")?.text()?.trim() ?: "Phim BL"
+            title = rawTitle.substringBefore(" - Yu Thánh Thiện").substringBefore(" - Yu Gềi").trim()
+            htmlContent = doc.html()
+        }
+
+        title = title.substringBefore(" - Yu Thánh Thiện").substringBefore(" - Yu Gềi").trim()
+
+        val ytData = decodeBase64Payload(htmlContent)
+        poster = ytData?.image ?: extractPosterFromHtml(htmlContent)
+        val plot = ytData?.note?.ifEmpty { null } ?: title
 
         val episodes = mutableListOf<Episode>()
 
         if (ytData?.episodes != null && ytData.episodes.isNotEmpty()) {
             ytData.episodes.forEachIndexed { epIndex, ep ->
                 val epNum = epIndex + 1
-                val epTitle = ep.name?.ifEmpty { "Tập " + epNum } ?: ("Tập " + epNum)
+                val epTitle = ep.name?.ifEmpty { "Tập $epNum" } ?: "Tập $epNum"
                 val servers = ep.servers ?: emptyList()
 
                 val isMultiPart = servers.any { s ->
@@ -250,10 +313,10 @@ class YuttProvider : MainAPI() {
                     servers.forEachIndexed { partIdx, server ->
                         val link = server.link?.trim() ?: ""
                         if (link.isNotEmpty()) {
-                            val partName = server.name ?: ("P" + (partIdx + 1))
+                            val partName = server.name ?: "P${partIdx + 1}"
                             episodes.add(
                                 newEpisode(link) {
-                                    this.name = epTitle + " (" + partName + ")"
+                                    this.name = "$epTitle ($partName)"
                                     this.episode = epNum
                                 }
                             )
@@ -273,6 +336,7 @@ class YuttProvider : MainAPI() {
                 }
             }
         } else {
+            val doc = Jsoup.parse(htmlContent)
             val iframes = doc.select("iframe")
             iframes.forEachIndexed { idx, iframe ->
                 val src = iframe.attr("src").trim()
@@ -280,7 +344,7 @@ class YuttProvider : MainAPI() {
                     val epNumber = idx + 1
                     episodes.add(
                         newEpisode(src) {
-                            this.name = "Tập " + epNumber
+                            this.name = "Tập $epNumber"
                             this.episode = epNumber
                         }
                     )
@@ -290,7 +354,7 @@ class YuttProvider : MainAPI() {
 
         val distinctEpisodes = episodes.distinctBy { it.data }
 
-        return newTvSeriesLoadResponse(title, url, TvType.AsianDrama, distinctEpisodes) {
+        return newTvSeriesLoadResponse(title, originalUrl, TvType.AsianDrama, distinctEpisodes) {
             this.posterUrl = poster
             this.plot = plot
             this.tags = listOf("BL", "Đam Mỹ", "Vietsub")
@@ -314,7 +378,7 @@ class YuttProvider : MainAPI() {
 
             if (url.contains("workers.dev/videoembed/")) {
                 val id = url.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
-                url = "https://ok.ru/videoembed/" + id
+                url = "https://ok.ru/videoembed/$id"
             } else if (url.contains("captionfy[.]com/video/youtube/") || url.contains("captionfy.com/video/youtube/")) {
                 val match = Regex("""captionfy[.]com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
                 if (match != null) {
