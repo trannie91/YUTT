@@ -390,7 +390,6 @@ class YuttProvider : MainAPI() {
             this.posterUrl = poster
             this.plot = plot
             this.tags = listOf("BL", "Đam Mỹ", "Vietsub")
-            this.rating = (ytData?.ratingYu ?: 5) * 2000
         }
     }
 
