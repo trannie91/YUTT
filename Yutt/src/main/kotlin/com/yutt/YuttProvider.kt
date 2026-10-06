@@ -21,7 +21,7 @@ class YuttProvider : MainAPI() {
         TvType.AsianDrama
     )
 
-    // Blog ID chính thức trên Google Blogger để kết nối trực tiếp không bao giờ bị chặn hay Connection Reset
+    // Blog ID chính thức trên Google Blogger
     private val BLOG_ID = "6970200487036183744"
     private val bloggerApiBase = "https://www.blogger.com/feeds/$BLOG_ID/posts/default"
 
@@ -65,10 +65,20 @@ class YuttProvider : MainAPI() {
     )
 
     private fun decodeBase64Payload(htmlContent: String): YtPayload? {
+        if (htmlContent.isEmpty()) return null
         return try {
-            val match = Regex("""class=["']?yt-data["']?[^>]*>([^<]+)</div>""").find(htmlContent)
-            if (match != null) {
-                val base64Str = match.groupValues[1].trim()
+            val doc = Jsoup.parse(htmlContent)
+            val ytDataDiv = doc.selectFirst("div.yt-data, div[class*=yt-data], .yt-data")
+            var base64Str = ytDataDiv?.text()?.trim()
+
+            if (base64Str.isNullOrEmpty()) {
+                val match = Regex("""yt-data["'][^>]*>([^<]+)</div>""").find(htmlContent)
+                if (match != null) {
+                    base64Str = match.groupValues[1].trim()
+                }
+            }
+
+            if (!base64Str.isNullOrEmpty()) {
                 val decodedBytes = Base64.getDecoder().decode(base64Str)
                 val jsonString = String(decodedBytes, Charsets.UTF_8)
                 mapper.readValue<YtPayload>(jsonString)
@@ -76,6 +86,7 @@ class YuttProvider : MainAPI() {
                 null
             }
         } catch (e: Exception) {
+            e.printStackTrace()
             null
         }
     }
@@ -83,7 +94,7 @@ class YuttProvider : MainAPI() {
     private fun extractPosterFromHtml(html: String): String {
         return try {
             val doc = Jsoup.parse(html)
-            val img = doc.selectFirst("img")
+            val img = doc.selectFirst("img[src*=blogger.googleusercontent.com], img[src*=bp.blogspot.com], img")
             var poster = ""
             if (img != null) {
                 val candidates = listOf(
@@ -115,7 +126,6 @@ class YuttProvider : MainAPI() {
                 )
             ).text
         } catch (e: Exception) {
-            // Nếu có sự cố, thử fallback sang domain yuthanhthien.top
             val fallbackUrl = endpointUrl.replace("https://www.blogger.com/feeds/$BLOG_ID/posts/default", "$mainUrl/feeds/posts/default")
             app.get(
                 fallbackUrl,
@@ -169,7 +179,8 @@ class YuttProvider : MainAPI() {
 
                     if (postApiUrl.isEmpty()) continue
 
-                    val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
+                    val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText()
+                        ?: entry.get("summary")?.get(JSON_T_KEY)?.asText() ?: ""
                     val ytData = decodeBase64Payload(htmlContent)
 
                     val thumbnail = entry.get(JSON_THUMBNAIL_KEY)?.get("url")?.asText()
@@ -239,7 +250,8 @@ class YuttProvider : MainAPI() {
 
                     if (postApiUrl.isEmpty()) continue
 
-                    val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
+                    val htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText()
+                        ?: entry.get("summary")?.get(JSON_T_KEY)?.asText() ?: ""
                     val ytData = decodeBase64Payload(htmlContent)
 
                     val thumbnail = entry.get(JSON_THUMBNAIL_KEY)?.get("url")?.asText()
@@ -264,30 +276,36 @@ class YuttProvider : MainAPI() {
         var title = "Phim BL"
         var htmlContent = ""
         var poster = ""
-        var originalUrl = url
 
-        if (url.contains("blogger.com/feeds/") || url.endsWith("?alt=json")) {
-            val jsonStr = app.get(url, headers = mapOf("User-Agent" to userAgent)).text
-            val root = mapper.readTree(jsonStr)
-            val entry = if (root.has("entry")) root.get("entry") else root
+        try {
+            if (url.contains("blogger.com/feeds/") || url.endsWith("?alt=json")) {
+                val jsonStr = fetchBloggerFeed(url)
+                val root = mapper.readTree(jsonStr)
+                val entry = if (root.has("entry")) root.get("entry") else root
 
-            title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: "Phim BL"
-            htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText() ?: ""
+                title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: "Phim BL"
+                htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText()
+                    ?: entry.get("summary")?.get(JSON_T_KEY)?.asText() ?: ""
+            } else {
+                val slug = url.substringAfterLast("/").substringBefore(".html")
+                val searchUrl = "$bloggerApiBase?q=" + URLEncoder.encode(slug, "UTF-8") + "&alt=json&max-results=1"
+                val jsonStr = fetchBloggerFeed(searchUrl)
+                val root = mapper.readTree(jsonStr)
+                val entry = root.get("feed")?.get("entry")?.firstOrNull()
 
-            val links = entry.get("link")
-            if (links != null && links.isArray) {
-                for (l in links) {
-                    if (l.get("rel")?.asText() == "alternate") {
-                        originalUrl = l.get("href")?.asText() ?: url
-                        break
-                    }
+                if (entry != null) {
+                    title = entry.get("title")?.get(JSON_T_KEY)?.asText()?.trim() ?: "Phim BL"
+                    htmlContent = entry.get("content")?.get(JSON_T_KEY)?.asText()
+                        ?: entry.get("summary")?.get(JSON_T_KEY)?.asText() ?: ""
+                } else {
+                    val doc = app.get(url, headers = mapOf("User-Agent" to userAgent)).document
+                    val rawTitle = doc.selectFirst("h1.post-title, h1, title")?.text()?.trim() ?: "Phim BL"
+                    title = rawTitle.substringBefore(" - Yu Thánh Thiện").substringBefore(" - Yu Gềi").trim()
+                    htmlContent = doc.html()
                 }
             }
-        } else {
-            val doc = app.get(url, headers = mapOf("User-Agent" to userAgent)).document
-            val rawTitle = doc.selectFirst("h1.post-title, h1, title")?.text()?.trim() ?: "Phim BL"
-            title = rawTitle.substringBefore(" - Yu Thánh Thiện").substringBefore(" - Yu Gềi").trim()
-            htmlContent = doc.html()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         title = title.substringBefore(" - Yu Thánh Thiện").substringBefore(" - Yu Gềi").trim()
@@ -299,25 +317,31 @@ class YuttProvider : MainAPI() {
         val episodes = mutableListOf<Episode>()
 
         if (ytData?.episodes != null && ytData.episodes.isNotEmpty()) {
-            ytData.episodes.forEachIndexed { epIndex, ep ->
-                val epNum = epIndex + 1
-                val epTitle = ep.name?.ifEmpty { "Tập $epNum" } ?: "Tập $epNum"
+            var epCounter = 1
+            for (ep in ytData.episodes) {
+                val epName = ep.name?.trim()?.ifEmpty { "Tập $epCounter" } ?: "Tập $epCounter"
                 val servers = ep.servers ?: emptyList()
 
-                val isMultiPart = servers.any { s ->
+                if (servers.isEmpty()) {
+                    epCounter++
+                    continue
+                }
+
+                val isMultiPart = servers.size > 1 && servers.any { s ->
                     val sName = s.name ?: ""
-                    sName.contains("/") || sName.contains("phần", ignoreCase = true)
+                    sName.contains("/") || sName.contains("phần", ignoreCase = true) || sName.contains("P", ignoreCase = true)
                 }
 
                 if (isMultiPart) {
                     servers.forEachIndexed { partIdx, server ->
                         val link = server.link?.trim() ?: ""
                         if (link.isNotEmpty()) {
-                            val partName = server.name ?: "P${partIdx + 1}"
+                            val partName = server.name?.trim()?.ifEmpty { "${partIdx + 1}" } ?: "${partIdx + 1}"
+                            val fullEpTitle = if (epName.contains(partName)) epName else "$epName ($partName)"
                             episodes.add(
                                 newEpisode(link) {
-                                    this.name = "$epTitle ($partName)"
-                                    this.episode = epNum
+                                    this.name = fullEpTitle
+                                    this.episode = epCounter
                                 }
                             )
                         }
@@ -328,14 +352,17 @@ class YuttProvider : MainAPI() {
                         val bundledData = validLinks.joinToString("|||")
                         episodes.add(
                             newEpisode(bundledData) {
-                                this.name = epTitle
-                                this.episode = epNum
+                                this.name = epName
+                                this.episode = epCounter
                             }
                         )
                     }
                 }
+                epCounter++
             }
-        } else {
+        }
+
+        if (episodes.isEmpty() && htmlContent.isNotEmpty()) {
             val doc = Jsoup.parse(htmlContent)
             val iframes = doc.select("iframe")
             iframes.forEachIndexed { idx, iframe ->
@@ -354,10 +381,16 @@ class YuttProvider : MainAPI() {
 
         val distinctEpisodes = episodes.distinctBy { it.data }
 
-        return newTvSeriesLoadResponse(title, originalUrl, TvType.AsianDrama, distinctEpisodes) {
+        return newTvSeriesLoadResponse(
+            name = title,
+            url = url,
+            type = TvType.AsianDrama,
+            episodes = distinctEpisodes
+        ) {
             this.posterUrl = poster
             this.plot = plot
             this.tags = listOf("BL", "Đam Mỹ", "Vietsub")
+            this.rating = (ytData?.ratingYu ?: 5) * 2000
         }
     }
 
@@ -379,10 +412,34 @@ class YuttProvider : MainAPI() {
             if (url.contains("workers.dev/videoembed/")) {
                 val id = url.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
                 url = "https://ok.ru/videoembed/$id"
-            } else if (url.contains("captionfy[.]com/video/youtube/") || url.contains("captionfy.com/video/youtube/")) {
+            }
+
+            if (url.contains("captionfy.com/video/youtube/") || url.contains("captionfy[.]com/video/youtube/")) {
                 val match = Regex("""captionfy[.]com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
                 if (match != null) {
-                    url = "https://www.youtube.com/watch?v=" + match.groupValues[1]
+                    val ytId = match.groupValues[1]
+                    val youtubeUrl = "https://www.youtube.com/watch?v=$ytId"
+                    
+                    try {
+                        subtitleCallback(
+                            SubtitleFile(
+                                "Tiếng Việt (Captionfy)",
+                                "https://www.captionfy.com/api/caption?id=$ytId&lang=vi"
+                            )
+                        )
+                    } catch (e: Exception) {
+                        // ignore subtitle error
+                    }
+
+                    try {
+                        val success = loadExtractor(youtubeUrl, "$mainUrl/", subtitleCallback, callback)
+                        if (success) {
+                            hasLoadedAny = true
+                            continue
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
 
