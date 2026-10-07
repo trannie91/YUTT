@@ -2,10 +2,11 @@ package com.yutt
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.util.Base64
 
@@ -37,12 +38,18 @@ class YuttProvider : MainAPI() {
 
     private val userAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    private val mapper = jacksonObjectMapper()
+    
+    // Cấu hình ObjectMapper chống lỗi khi gặp trường dữ liệu mới
+    private val mapper = jacksonObjectMapper().apply {
+        configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
+    }
 
     // Khóa trường JSON của Blogger
     private val JSON_T_KEY = "$" + "t"
     private val JSON_THUMBNAIL_KEY = "media$" + "thumbnail"
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class YtServer(
         val name: String? = null,
         val type: String? = null,
@@ -50,11 +57,13 @@ class YuttProvider : MainAPI() {
         val _id: String? = null
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class YtEpisode(
         val name: String? = null,
         val servers: List<YtServer>? = null
     )
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class YtPayload(
         val v: Int? = null,
         val type: String? = null,
@@ -81,7 +90,37 @@ class YuttProvider : MainAPI() {
             if (!base64Str.isNullOrEmpty()) {
                 val decodedBytes = Base64.getDecoder().decode(base64Str)
                 val jsonString = String(decodedBytes, Charsets.UTF_8)
-                mapper.readValue<YtPayload>(jsonString)
+                
+                try {
+                    mapper.readValue<YtPayload>(jsonString)
+                } catch (e: Exception) {
+                    // Dự phòng phân tích Tree JSON trực tiếp nếu Jackson ánh xạ thất bại
+                    val root = mapper.readTree(jsonString)
+                    val img = root.get("image")?.asText()
+                    val noteText = root.get("note")?.asText()
+                    val epsList = mutableListOf<YtEpisode>()
+                    val epsNode = root.get("episodes")
+                    if (epsNode != null && epsNode.isArray) {
+                        for (epNode in epsNode) {
+                            val epName = epNode.get("name")?.asText()
+                            val sList = mutableListOf<YtServer>()
+                            val sNode = epNode.get("servers")
+                            if (sNode != null && sNode.isArray) {
+                                for (srv in sNode) {
+                                    sList.add(
+                                        YtServer(
+                                            name = srv.get("name")?.asText(),
+                                            type = srv.get("type")?.asText(),
+                                            link = srv.get("link")?.asText()
+                                        )
+                                    )
+                                }
+                            }
+                            epsList.add(YtEpisode(name = epName, servers = sList))
+                        }
+                    }
+                    YtPayload(image = img, note = noteText, episodes = epsList)
+                }
             } else {
                 null
             }
@@ -408,11 +447,13 @@ class YuttProvider : MainAPI() {
         for (rawUrl in serverUrls) {
             var url = rawUrl
 
+            // 1. Chuyển đổi proxy Cloudflare Worker sang domain OK.ru gốc
             if (url.contains("workers.dev/videoembed/")) {
                 val id = url.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
                 url = "https://ok.ru/videoembed/$id"
             }
 
+            // 2. Xử lý link phụ đề Captionfy YouTube
             if (url.contains("captionfy.com/video/youtube/") || url.contains("captionfy[.]com/video/youtube/")) {
                 val match = Regex("""captionfy[.]com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
                 if (match != null) {
@@ -427,7 +468,7 @@ class YuttProvider : MainAPI() {
                             )
                         )
                     } catch (e: Exception) {
-                        // ignore subtitle error
+                        // ignore
                     }
 
                     try {
@@ -450,6 +491,19 @@ class YuttProvider : MainAPI() {
                     }
                     url.contains("vk.com") || url.contains("vkvideo.ru") || url.contains("vkontakte") -> {
                         vkExtractor.getUrl(url, "$mainUrl/", subtitleCallback, callback)
+                        hasLoadedAny = true
+                    }
+                    url.endsWith(".mp4") || url.endsWith(".m3u8") || url.contains(".mp4?") || url.contains(".m3u8?") -> {
+                        callback(
+                            ExtractorLink(
+                                source = name,
+                                name = "Direct Stream - 1080p FHD",
+                                url = url,
+                                referer = "$mainUrl/",
+                                quality = Qualities.P1080.value,
+                                type = if (url.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                            )
+                        )
                         hasLoadedAny = true
                     }
                     else -> {
