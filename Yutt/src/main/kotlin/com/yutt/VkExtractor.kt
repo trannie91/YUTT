@@ -29,9 +29,25 @@ class VkExtractor : ExtractorApi() {
                 )
             ).text
 
-            // 1. Luồng HLS Multi-Quality Adaptive FHD 1080p
-            val hlsMatch = Regex("""["']?hls["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
+            // 1. Tìm DUY NHẤT MP4 1080p Full HD trước - Loại bỏ toàn bộ chất lượng thấp
+            val mp4_1080 = Regex("""["']?url1080["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
+            if (mp4_1080 != null) {
+                val mp4Url = mp4_1080.groupValues[1].replace(ESCAPED_SLASH, "/")
+                callback(
+                    ExtractorLink(
+                        source = name,
+                        name = "VKontakte - 1080p Full HD",
+                        url = mp4Url,
+                        referer = "https://vk.com/",
+                        quality = Qualities.P1080.value,
+                        type = ExtractorLinkType.VIDEO
+                    )
+                )
+                return
+            }
 
+            // 2. Nếu không có direct MP4 1080p, lấy luồng HLS FHD 1080p Adaptive
+            val hlsMatch = Regex("""["']?hls["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
             if (hlsMatch != null) {
                 val hlsUrl = hlsMatch.groupValues[1].replace(ESCAPED_SLASH, "/")
                 callback(
@@ -44,38 +60,7 @@ class VkExtractor : ExtractorApi() {
                         type = ExtractorLinkType.M3U8
                     )
                 )
-            }
-
-            // 2. Lọc DUY NHẤT MP4 1080p Full HD (Loại bỏ toàn bộ 720p, 480p, 360p, 240p)
-            val mp4_1080 = Regex("""["']?url1080["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
-
-            if (mp4_1080 != null) {
-                val mp4Url = mp4_1080.groupValues[1].replace(ESCAPED_SLASH, "/")
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = "VKontakte - 1080p Full HD Direct",
-                        url = mp4Url,
-                        referer = "https://vk.com/",
-                        quality = Qualities.P1080.value,
-                        type = ExtractorLinkType.VIDEO
-                    )
-                )
-            } else if (hlsMatch == null) {
-                val mp4_720 = Regex("""["']?url720["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
-                if (mp4_720 != null) {
-                    val mp4Url = mp4_720.groupValues[1].replace(ESCAPED_SLASH, "/")
-                    callback(
-                        ExtractorLink(
-                            source = name,
-                            name = "VKontakte - 720p HD Direct",
-                            url = mp4Url,
-                            referer = "https://vk.com/",
-                            quality = Qualities.P720.value,
-                            type = ExtractorLinkType.VIDEO
-                        )
-                    )
-                }
+                return
             }
         } catch (e: Exception) {
             e.printStackTrace()
