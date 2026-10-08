@@ -472,11 +472,8 @@ class YuttProvider : MainAPI() {
                     }
 
                     try {
-                        val success = loadExtractor(youtubeUrl, "$mainUrl/", subtitleCallback, callback)
-                        if (success) {
-                            hasLoadedAny = true
-                            continue
-                        }
+                        loadExtractor(youtubeUrl, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        if (hasLoadedAny) break
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -486,15 +483,15 @@ class YuttProvider : MainAPI() {
             try {
                 when {
                     url.contains("ok.ru") || url.contains("odnoklassniki") -> {
-                        okExtractor.getUrl(url, "$mainUrl/", subtitleCallback, callback)
-                        hasLoadedAny = true
+                        okExtractor.getUrl(url, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        if (hasLoadedAny) break
                     }
                     url.contains("vk.com") || url.contains("vkvideo.ru") || url.contains("vkontakte") -> {
-                        vkExtractor.getUrl(url, "$mainUrl/", subtitleCallback, callback)
-                        hasLoadedAny = true
+                        vkExtractor.getUrl(url, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        if (hasLoadedAny) break
                     }
                     url.endsWith(".mp4") || url.endsWith(".m3u8") || url.contains(".mp4?") || url.contains(".m3u8?") -> {
-                        callback(
+                        strict1080pCallback(
                             ExtractorLink(
                                 source = name,
                                 name = "Direct Stream - 1080p FHD",
@@ -504,11 +501,11 @@ class YuttProvider : MainAPI() {
                                 type = if (url.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                             )
                         )
-                        hasLoadedAny = true
+                        if (hasLoadedAny) break
                     }
                     else -> {
-                        val success = loadExtractor(url, "$mainUrl/", subtitleCallback, callback)
-                        if (success) hasLoadedAny = true
+                        loadExtractor(url, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        if (hasLoadedAny) break
                     }
                 }
             } catch (e: Exception) {
