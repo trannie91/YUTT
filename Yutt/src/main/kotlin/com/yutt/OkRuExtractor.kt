@@ -52,7 +52,36 @@ class OkRuExtractor : ExtractorApi() {
                 metadataNode
             }
 
-            // 1. Luồng HLS Adaptive Master Playlist (Tự động chọn 1080p cao nhất theo mạng)
+            // 1. Tìm DUY NHẤT luồng MP4 1080p Full HD trực tiếp trước
+            val videosNode = metaJson.get("videos")
+            var fhdUrl: String? = null
+            if (videosNode != null && videosNode.isArray) {
+                for (v in videosNode) {
+                    val qualityName = v.get("name")?.asText()?.lowercase() ?: ""
+                    val videoUrl = v.get("url")?.asText() ?: continue
+                    if (qualityName == "full" || qualityName == "1080" || qualityName == "ultra" || qualityName == "quad") {
+                        fhdUrl = videoUrl
+                        break
+                    }
+                }
+            }
+
+            if (!fhdUrl.isNullOrEmpty()) {
+                // CHỈ LẤY DUY NHẤT 1 LINK 1080P FULL HD MP4 - LOẠI BỎ TOÀN BỘ CHẤT LƯỢNG THẤP
+                callback(
+                    ExtractorLink(
+                        source = name,
+                        name = "OK.ru - 1080p Full HD",
+                        url = fhdUrl,
+                        referer = "https://ok.ru/",
+                        quality = Qualities.P1080.value,
+                        type = ExtractorLinkType.VIDEO
+                    )
+                )
+                return
+            }
+
+            // 2. Nếu không có direct MP4 1080p, lấy duy nhất luồng Master HLS 1080p Adaptive cao nhất
             val hlsUrl = metaJson.get("hlsManifestUrl")?.asText()
             if (!hlsUrl.isNullOrEmpty()) {
                 callback(
@@ -65,58 +94,7 @@ class OkRuExtractor : ExtractorApi() {
                         type = ExtractorLinkType.M3U8
                     )
                 )
-            }
-
-            // 2. Lấy luồng MP4 trực tiếp, ưu tiên 1080p FHD cao nhất
-            val videosNode = metaJson.get("videos")
-            if (videosNode != null && videosNode.isArray) {
-                val videoList = mutableListOf<Pair<String, String>>()
-                for (v in videosNode) {
-                    val qualityName = v.get("name")?.asText()?.lowercase() ?: ""
-                    val videoUrl = v.get("url")?.asText() ?: continue
-                    videoList.add(qualityName to videoUrl)
-                }
-
-                // Ưu tiên 1080p FHD (full/1080)
-                val fhd1080 = videoList.firstOrNull { it.first == "full" || it.first == "1080" }
-                if (fhd1080 != null) {
-                    callback(
-                        ExtractorLink(
-                            source = name,
-                            name = "OK.ru - 1080p Full HD Direct",
-                            url = fhd1080.second,
-                            referer = "https://ok.ru/",
-                            quality = Qualities.P1080.value,
-                            type = ExtractorLinkType.VIDEO
-                        )
-                    )
-                } else {
-                    // Fallback sang 720p HD nếu video gốc chỉ có 720p
-                    val hd720 = videoList.firstOrNull { it.first == "hd" || it.first == "720" }
-                    if (hd720 != null) {
-                        callback(
-                            ExtractorLink(
-                                source = name,
-                                name = "OK.ru - 720p HD Direct",
-                                url = hd720.second,
-                                referer = "https://ok.ru/",
-                                quality = Qualities.P720.value,
-                                type = ExtractorLinkType.VIDEO
-                            )
-                        )
-                    } else if (videoList.isNotEmpty()) {
-                        callback(
-                            ExtractorLink(
-                                source = name,
-                                name = "OK.ru - Direct Video",
-                                url = videoList.first().second,
-                                referer = "https://ok.ru/",
-                                quality = Qualities.Unknown.value,
-                                type = ExtractorLinkType.VIDEO
-                            )
-                        )
-                    }
-                }
+                return
             }
         } catch (e: Exception) {
             e.printStackTrace()
