@@ -432,6 +432,45 @@ class YuttProvider : MainAPI() {
         }
     }
 
+    private fun emit1080pOnly(
+        link: ExtractorLink,
+        deliveredUrls: MutableSet<String>,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val q = link.quality
+        val nameLower = link.name.lowercase()
+
+        val isLowQuality = nameLower.contains("720p") ||
+                           nameLower.contains("480p") ||
+                           nameLower.contains("360p") ||
+                           nameLower.contains("240p") ||
+                           nameLower.contains("144p") ||
+                           nameLower.contains("sd") ||
+                           (q in 1 until Qualities.P1080.value)
+
+        if (!isLowQuality) {
+            if (deliveredUrls.add(link.url)) {
+                val finalName = when {
+                    link.name.contains("1080", ignoreCase = true) || link.name.contains("FHD", ignoreCase = true) -> link.name
+                    else -> "${link.name} - 1080p FHD"
+                }
+                callback(
+                    ExtractorLink(
+                        source = link.source,
+                        name = finalName,
+                        url = link.url,
+                        referer = link.referer,
+                        quality = Qualities.P1080.value,
+                        type = link.type,
+                        headers = link.headers
+                    )
+                )
+                return true
+            }
+        }
+        return false
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -440,11 +479,19 @@ class YuttProvider : MainAPI() {
     ): Boolean {
         var hasLoadedAny = false
         val serverUrls = data.split("|||").map { it.trim() }.filter { it.isNotEmpty() }
+        val deliveredUrls = mutableSetOf<String>()
 
         val okExtractor = OkRuExtractor()
         val vkExtractor = VkExtractor()
 
+        val safeCallback: (ExtractorLink) -> Unit = { rawLink ->
+            if (emit1080pOnly(rawLink, deliveredUrls, callback)) {
+                hasLoadedAny = true
+            }
+        }
+
         for (rawUrl in serverUrls) {
+            if (hasLoadedAny) break
             var url = rawUrl
 
             // 1. Chuyển đổi proxy Cloudflare Worker sang domain OK.ru gốc
@@ -472,7 +519,7 @@ class YuttProvider : MainAPI() {
                     }
 
                     try {
-                        loadExtractor(youtubeUrl, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        loadExtractor(youtubeUrl, "$mainUrl/", subtitleCallback, safeCallback)
                         if (hasLoadedAny) break
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -483,15 +530,15 @@ class YuttProvider : MainAPI() {
             try {
                 when {
                     url.contains("ok.ru") || url.contains("odnoklassniki") -> {
-                        okExtractor.getUrl(url, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        okExtractor.getUrl(url, "$mainUrl/", subtitleCallback, safeCallback)
                         if (hasLoadedAny) break
                     }
                     url.contains("vk.com") || url.contains("vkvideo.ru") || url.contains("vkontakte") -> {
-                        vkExtractor.getUrl(url, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        vkExtractor.getUrl(url, "$mainUrl/", subtitleCallback, safeCallback)
                         if (hasLoadedAny) break
                     }
                     url.endsWith(".mp4") || url.endsWith(".m3u8") || url.contains(".mp4?") || url.contains(".m3u8?") -> {
-                        strict1080pCallback(
+                        safeCallback(
                             ExtractorLink(
                                 source = name,
                                 name = "Direct Stream - 1080p FHD",
@@ -504,7 +551,7 @@ class YuttProvider : MainAPI() {
                         if (hasLoadedAny) break
                     }
                     else -> {
-                        loadExtractor(url, "$mainUrl/", subtitleCallback, strict1080pCallback)
+                        loadExtractor(url, "$mainUrl/", subtitleCallback, safeCallback)
                         if (hasLoadedAny) break
                     }
                 }
