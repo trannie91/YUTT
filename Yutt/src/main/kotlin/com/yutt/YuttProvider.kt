@@ -22,7 +22,6 @@ class YuttProvider : MainAPI() {
         TvType.AsianDrama
     )
 
-    // Blog ID chính thức trên Google Blogger
     private val BLOG_ID = "6970200487036183744"
     private val bloggerApiBase = "https://www.blogger.com/feeds/$BLOG_ID/posts/default"
 
@@ -39,13 +38,11 @@ class YuttProvider : MainAPI() {
     private val userAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     
-    // Cấu hình ObjectMapper chống lỗi khi gặp trường dữ liệu mới
     private val mapper = jacksonObjectMapper().apply {
         configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
     }
 
-    // Khóa trường JSON của Blogger
     private val JSON_T_KEY = "$" + "t"
     private val JSON_THUMBNAIL_KEY = "media$" + "thumbnail"
 
@@ -94,7 +91,6 @@ class YuttProvider : MainAPI() {
                 try {
                     mapper.readValue<YtPayload>(jsonString)
                 } catch (e: Exception) {
-                    // Dự phòng phân tích Tree JSON trực tiếp nếu Jackson ánh xạ thất bại
                     val root = mapper.readTree(jsonString)
                     val img = root.get("image")?.asText()
                     val noteText = root.get("note")?.asText()
@@ -494,13 +490,11 @@ class YuttProvider : MainAPI() {
             if (hasLoadedAny) break
             var url = rawUrl
 
-            // 1. Chuyển đổi proxy Cloudflare Worker sang domain OK.ru gốc
             if (url.contains("workers.dev/videoembed/")) {
                 val id = url.substringAfter("/videoembed/").substringBefore("?").substringBefore("#")
                 url = "https://ok.ru/videoembed/$id"
             }
 
-            // 2. Xử lý link phụ đề Captionfy YouTube
             if (url.contains("captionfy.com/video/youtube/") || url.contains("captionfy[.]com/video/youtube/")) {
                 val match = Regex("""captionfy[.]com/video/youtube/([a-zA-Z0-9_-]+)""").find(url)
                 if (match != null) {
