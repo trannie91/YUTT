@@ -52,36 +52,29 @@ class OkRuExtractor : ExtractorApi() {
                 metadataNode
             }
 
-            // 1. Tìm DUY NHẤT luồng MP4 1080p Full HD trực tiếp trước
+            // 1. Luồng MP4 trực tiếp 1080p Full HD
             val videosNode = metaJson.get("videos")
-            var fhdUrl: String? = null
             if (videosNode != null && videosNode.isArray) {
                 for (v in videosNode) {
                     val qualityName = v.get("name")?.asText()?.lowercase() ?: ""
                     val videoUrl = v.get("url")?.asText() ?: continue
                     if (qualityName == "full" || qualityName == "1080" || qualityName == "ultra" || qualityName == "quad") {
-                        fhdUrl = videoUrl
+                        callback(
+                            ExtractorLink(
+                                source = name,
+                                name = "OK.ru - 1080p Full HD",
+                                url = videoUrl,
+                                referer = "https://ok.ru/",
+                                quality = Qualities.P1080.value,
+                                type = ExtractorLinkType.VIDEO
+                            )
+                        )
                         break
                     }
                 }
             }
 
-            if (!fhdUrl.isNullOrEmpty()) {
-                // CHỈ LẤY DUY NHẤT 1 LINK 1080P FULL HD MP4 - LOẠI BỎ TOÀN BỘ CHẤT LƯỢNG THẤP
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = "OK.ru - 1080p Full HD",
-                        url = fhdUrl,
-                        referer = "https://ok.ru/",
-                        quality = Qualities.P1080.value,
-                        type = ExtractorLinkType.VIDEO
-                    )
-                )
-                return
-            }
-
-            // 2. Nếu không có direct MP4 1080p, lấy duy nhất luồng Master HLS 1080p Adaptive cao nhất
+            // 2. Luồng HLS Adaptive Master Playlist 1080p
             val hlsUrl = metaJson.get("hlsManifestUrl")?.asText()
             if (!hlsUrl.isNullOrEmpty()) {
                 callback(
@@ -94,7 +87,6 @@ class OkRuExtractor : ExtractorApi() {
                         type = ExtractorLinkType.M3U8
                     )
                 )
-                return
             }
         } catch (e: Exception) {
             e.printStackTrace()
