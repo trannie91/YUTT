@@ -52,29 +52,7 @@ class OkRuExtractor : ExtractorApi() {
                 metadataNode
             }
 
-            // 1. Luồng MP4 trực tiếp 1080p Full HD
-            val videosNode = metaJson.get("videos")
-            if (videosNode != null && videosNode.isArray) {
-                for (v in videosNode) {
-                    val qualityName = v.get("name")?.asText()?.lowercase() ?: ""
-                    val videoUrl = v.get("url")?.asText() ?: continue
-                    if (qualityName == "full" || qualityName == "1080" || qualityName == "ultra" || qualityName == "quad") {
-                        callback(
-                            ExtractorLink(
-                                source = name,
-                                name = "OK.ru - 1080p Full HD",
-                                url = videoUrl,
-                                referer = "https://ok.ru/",
-                                quality = Qualities.P1080.value,
-                                type = ExtractorLinkType.VIDEO
-                            )
-                        )
-                        break
-                    }
-                }
-            }
-
-            // 2. Luồng HLS Adaptive Master Playlist 1080p
+            // 1. Luồng HLS Adaptive 1080p FHD
             val hlsUrl = metaJson.get("hlsManifestUrl")?.asText()
             if (!hlsUrl.isNullOrEmpty()) {
                 callback(
@@ -87,6 +65,28 @@ class OkRuExtractor : ExtractorApi() {
                         type = ExtractorLinkType.M3U8
                     )
                 )
+            }
+
+            // 2. Luồng Direct MP4 1080p Full HD
+            val videosNode = metaJson.get("videos")
+            if (videosNode != null && videosNode.isArray) {
+                for (v in videosNode) {
+                    val qualityName = v.get("name")?.asText()?.lowercase() ?: ""
+                    val videoUrl = v.get("url")?.asText() ?: continue
+                    if (qualityName == "full" || qualityName == "1080" || qualityName == "ultra" || qualityName == "quad") {
+                        callback(
+                            ExtractorLink(
+                                source = name,
+                                name = "OK.ru - 1080p Full HD Direct",
+                                url = videoUrl,
+                                referer = "https://ok.ru/",
+                                quality = Qualities.P1080.value,
+                                type = ExtractorLinkType.VIDEO
+                            )
+                        )
+                        break
+                    }
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
