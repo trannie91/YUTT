@@ -29,24 +29,8 @@ class VkExtractor : ExtractorApi() {
                 )
             ).text
 
-            // 1. MP4 1080p Full HD Direct
-            val mp4_1080 = Regex("""["']?url1080["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
-            if (mp4_1080 != null) {
-                val mp4Url = mp4_1080.groupValues[1].replace(ESCAPED_SLASH, "/")
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = "VKontakte - 1080p Full HD",
-                        url = mp4Url,
-                        referer = "https://vk.com/",
-                        quality = Qualities.P1080.value,
-                        type = ExtractorLinkType.VIDEO
-                    )
-                )
-            }
-
-            // 2. Luồng HLS Multi-Quality Adaptive FHD 1080p
-            val hlsMatch = Regex("""["']?hls["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
+            // 1. Luồng HLS Adaptive 1080p FHD
+            val hlsMatch = Regex("""["']?hls["']?\s*[:=]\s*["']?([^"',\s>]+)""").find(response)
             if (hlsMatch != null) {
                 val hlsUrl = hlsMatch.groupValues[1].replace(ESCAPED_SLASH, "/")
                 callback(
@@ -57,6 +41,22 @@ class VkExtractor : ExtractorApi() {
                         referer = "https://vk.com/",
                         quality = Qualities.P1080.value,
                         type = ExtractorLinkType.M3U8
+                    )
+                )
+            }
+
+            // 2. Luồng Direct MP4 1080p Full HD
+            val mp4_1080 = Regex("""["']?url1080["']?\s*[:=]\s*["']?([^"',\s>]+)""").find(response)
+            if (mp4_1080 != null) {
+                val mp4Url = mp4_1080.groupValues[1].replace(ESCAPED_SLASH, "/")
+                callback(
+                    ExtractorLink(
+                        source = name,
+                        name = "VKontakte - 1080p Full HD Direct",
+                        url = mp4Url,
+                        referer = "https://vk.com/",
+                        quality = Qualities.P1080.value,
+                        type = ExtractorLinkType.VIDEO
                     )
                 )
             }
