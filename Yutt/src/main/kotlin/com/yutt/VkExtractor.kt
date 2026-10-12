@@ -29,7 +29,7 @@ class VkExtractor : ExtractorApi() {
                 )
             ).text
 
-            // 1. Tìm DUY NHẤT MP4 1080p Full HD trước - Loại bỏ toàn bộ chất lượng thấp
+            // 1. MP4 1080p Full HD Direct
             val mp4_1080 = Regex("""["']?url1080["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
             if (mp4_1080 != null) {
                 val mp4Url = mp4_1080.groupValues[1].replace(ESCAPED_SLASH, "/")
@@ -43,10 +43,9 @@ class VkExtractor : ExtractorApi() {
                         type = ExtractorLinkType.VIDEO
                     )
                 )
-                return
             }
 
-            // 2. Nếu không có direct MP4 1080p, lấy luồng HLS FHD 1080p Adaptive
+            // 2. Luồng HLS Multi-Quality Adaptive FHD 1080p
             val hlsMatch = Regex("""["']?hls["']?s*[:=]s*["']?([^"',s>]+)""").find(response)
             if (hlsMatch != null) {
                 val hlsUrl = hlsMatch.groupValues[1].replace(ESCAPED_SLASH, "/")
@@ -60,7 +59,6 @@ class VkExtractor : ExtractorApi() {
                         type = ExtractorLinkType.M3U8
                     )
                 )
-                return
             }
         } catch (e: Exception) {
             e.printStackTrace()
